@@ -27,7 +27,8 @@ public class OrderHistoryTask {
     @Scheduled(fixedRate = 6000)
     public void executeOrderHistoryTask() {
         try {
-            long startTime = System.currentTimeMillis() - 10000;
+            // TODO 后续试情况调整频率
+            long startTime = System.currentTimeMillis() - 60000;
             long endTime = LocalDate.now()
                     .atTime(LocalTime.MAX)
                     .atZone(ZoneId.systemDefault())
@@ -53,6 +54,7 @@ public class OrderHistoryTask {
                 for (Order order : orders) {
                     long orderTime = order.getOrderTime();
                     if (orderTime > lastOrderTime) {
+                        // 查询带单员保证金后查询本身用户保证金计算比例
                         log.info("New order detected: {}", JSON.toJSONString(order));
                         // 模拟下单操作（你自己的逻辑）
                         // 更新已处理时间戳
