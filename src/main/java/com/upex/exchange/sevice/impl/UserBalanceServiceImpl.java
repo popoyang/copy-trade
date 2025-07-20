@@ -1,22 +1,65 @@
 package com.upex.exchange.sevice.impl;
 
-import com.binance.connector.futures.client.impl.UMFuturesClientImpl;
+import com.alibaba.fastjson.JSON;
+import com.upex.exchange.Api.BinanceApiService;
+import com.upex.exchange.model.BalanceResponse;
 import com.upex.exchange.sevice.UserBalanceService;
+import com.upex.exchange.util.HmacSHA256Utils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import retrofit2.Call;
+import retrofit2.Response;
 
-import java.util.LinkedHashMap;
+import java.math.BigDecimal;
+import java.util.List;
 
 
 @Slf4j
 @Service
 public class UserBalanceServiceImpl implements UserBalanceService {
 
-    public void getBalance(){
-        String path = "fapi/v2/balance";
-        LinkedHashMap<String, Object> parameters = new LinkedHashMap<>();
+    @Autowired
+    private BinanceApiService binanceApiService;
 
-        UMFuturesClientImpl client = new UMFuturesClientImpl("API_KEY", "SECRET_KEY", "");
-        String result = client.account().futuresAccountBalance(parameters);
+    @Value("${binance.secretKey}")
+    private String secretKey;
+
+    @Value("${binance.api.apiKey}")
+    private String apiKey;
+
+    @Value("${binance.api.recvWindow:5000}")
+    private long recvWindow;
+
+    public BigDecimal getAvailableBalance(String asset) {
+        try {
+            //生成签名
+            long timestamp  = System.currentTimeMillis();
+            String query = "timestamp=" + timestamp;
+            String signature = HmacSHA256Utils.sign(query, secretKey);
+
+            // 调用获取余额接口
+            Call<List<BalanceResponse>> call = binanceApiService.getFuturesBalance(timestamp, signature, apiKey);
+            Response<List<BalanceResponse>> response = call.execute();
+
+            log.info("getAvailableBalance Response: {}", JSON.toJSONString(response.body()));
+
+            if (response.isSuccessful() && response.body() != null) {
+                for (BalanceResponse balance : response.body()) {
+                    if (asset.equalsIgnoreCase(balance.getAsset())) {
+                        return new BigDecimal(balance.getAvailableBalance());
+                    }
+                }
+                log.warn("Asset {} not found in Binance response.", asset);
+            } else {
+                log.error("Binance response error: {}", response.errorBody() != null ? response.errorBody().string() : "null");
+            }
+        } catch (Exception e) {
+            log.error("Exception while fetching balance: ", e);
+        }
+        return BigDecimal.ZERO;
     }
+
+
 }

@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
-@ConfigurationProperties(prefix = "baseurl")
+@ConfigurationProperties(prefix = "binance")
 public class BaseurlConfig {
 
     @Value("webUrl")

@@ -10,8 +10,10 @@ import com.upex.exchange.util.HttpUtils;
 import com.upex.exchange.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
@@ -25,8 +27,19 @@ public class LeadServiceImpl implements LeadService {
     @Autowired
     private BaseurlConfig baseurlConfig;
 
-    private Map<String,String> headers = new ConcurrentHashMap<>();
+    @Value("${binance.csrftoken}")
+    private String csrftoken;
 
+    @Value("${binance.cookie}")
+    private String cookie;
+
+    private Map<String,String> headers = new ConcurrentHashMap<>();
+    @PostConstruct
+    public void initHeaders() {
+        headers.put("csrftoken", csrftoken);
+        headers.put("Cookie", cookie);
+        log.info("Headers initialized: {}", JSON.toJSONString(headers));
+    }
 
     public List<Order> getOrderHistoryList(PortfolioQueryRequest request) {
         try {

@@ -17,6 +17,7 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <retrofit.version>2.3.13</retrofit.version>
     </properties>
 
     <dependencies>
@@ -65,7 +66,11 @@
             <artifactId>binance-futures-connector-java</artifactId>
             <version>3.0.5</version>
         </dependency>
-
+        <dependency>
+            <groupId>com.github.lianjiatech</groupId>
+            <artifactId>retrofit-spring-boot-starter</artifactId>
+            <version>${retrofit.version}</version>
+        </dependency>
 
 
     </dependencies>
