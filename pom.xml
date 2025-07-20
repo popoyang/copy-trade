@@ -54,6 +54,19 @@
             <version>4.12.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+            <version>2.4.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.binance</groupId>
+            <artifactId>binance-futures-connector-java</artifactId>
+            <version>3.0.5</version>
+        </dependency>
+
+
 
     </dependencies>
 
