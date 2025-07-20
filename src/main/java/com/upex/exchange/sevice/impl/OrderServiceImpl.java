@@ -186,6 +186,7 @@ public class OrderServiceImpl implements OrderService {
                         .divide(ratio, 4, RoundingMode.HALF_UP)
                         .multiply(multiplier);
                 log.info("placeMarketOrder:symbol={}, side={} , side={}, openPositionQty={}", symbol, side, positionSide, openPositionQty);
+                // TODO 如何兼容单向双项持仓
                 placeMarketOrder(symbol,side,Constants.LONG,openPositionQty);
 
                 log.info("Calculated open position quantity: {}", openPositionQty);
@@ -194,7 +195,8 @@ public class OrderServiceImpl implements OrderService {
                 log.info("positionRisk:{}", JSON.toJSONString(positionRisk));
                 if (positionRisk != null) {
                     log.info("placeMarketOrder:symbol={}, side={} , side={}, openPositionQty={}", symbol, side, positionSide, new BigDecimal(positionRisk.getPositionAmt()));
-                placeMarketOrder(symbol,side,Constants.LONG,new BigDecimal(positionRisk.getPositionAmt()));
+                    // TODO 如何兼容单向双项持仓
+                    placeMarketOrder(symbol,side,Constants.LONG,new BigDecimal(positionRisk.getPositionAmt()));
                 }
 
             }
