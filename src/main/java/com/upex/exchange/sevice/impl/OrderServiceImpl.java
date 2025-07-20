@@ -200,7 +200,6 @@ public class OrderServiceImpl implements OrderService {
             }
 
         }
-        PositionRisk positionRisk = getPositionRisk("ENAUSDT", "BOTH");
         return System.currentTimeMillis();
     }
 }
