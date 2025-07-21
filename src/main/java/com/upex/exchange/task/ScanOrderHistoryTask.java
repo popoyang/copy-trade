@@ -7,6 +7,7 @@ import com.upex.exchange.sevice.OrderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +32,7 @@ public class ScanOrderHistoryTask {
     private long lastOrderTime = System.currentTimeMillis();
 
     @Scheduled(fixedRateString = "${order.history.task.fixedRate:500}")
+    @ConditionalOnProperty(name = "order.history.task.enabled", havingValue = "true", matchIfMissing = true)
     public void executeOrderHistoryTask() {
         try {
 
