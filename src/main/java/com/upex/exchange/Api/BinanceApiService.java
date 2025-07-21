@@ -1,10 +1,7 @@
 package com.upex.exchange.Api;
 
 import com.github.lianjiatech.retrofit.spring.boot.core.RetrofitClient;
-import com.upex.exchange.model.BalanceResponse;
-import com.upex.exchange.model.OrderResponse;
-import com.upex.exchange.model.PositionRisk;
-import com.upex.exchange.model.ServerTimeResponse;
+import com.upex.exchange.model.*;
 import retrofit2.Call;
 import retrofit2.http.*;
 
@@ -41,6 +38,26 @@ public interface BinanceApiService {
             @Query("signature") String signature,
             @Header("X-MBX-APIKEY") String apiKey
     );
+
+    @GET("/fapi/v3/account")
+    Call<AccountInfo> getAccountInfo(
+            @Query("timestamp") long timestamp,
+            @Query("recvWindow") Long recvWindow,
+            @Query("signature") String signature,
+            @Header("X-MBX-APIKEY") String apiKey
+    );
+
+    @GET("/fapi/v1/exchangeInfo")
+    Call<ExchangeInfoResponse> getExchangeInfo();
+
+
+    @GET("/fapi/v1/premiumIndex")
+    Call<MarkPriceResponse> getMarkPrice(@Query("symbol") String symbol);
+
+    @GET("/fapi/v1/ticker/price")
+    Call<TickerPriceResponse> getTickerPrice(@Query("symbol") String symbol);
+
+
 
 
     @GET("/api/v3/time")

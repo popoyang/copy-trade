@@ -2,8 +2,9 @@ package com.upex.exchange.sevice.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.upex.exchange.Api.BinanceApiService;
+import com.upex.exchange.model.AccountInfo;
 import com.upex.exchange.model.BalanceResponse;
-import com.upex.exchange.sevice.UserBalanceService;
+import com.upex.exchange.sevice.UserInfoService;
 import com.upex.exchange.util.HmacSHA256Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +19,7 @@ import java.util.List;
 
 @Slf4j
 @Service
-public class UserBalanceServiceImpl implements UserBalanceService {
+public class UserInfoServiceImpl implements UserInfoService {
 
     @Autowired
     private BinanceApiService binanceApiService;
@@ -32,6 +33,7 @@ public class UserBalanceServiceImpl implements UserBalanceService {
     @Value("${binance.api.recvWindow:5000}")
     private long recvWindow;
 
+    @Override
     public BigDecimal getAvailableBalance(String asset) {
         try {
             //生成签名
@@ -60,6 +62,30 @@ public class UserBalanceServiceImpl implements UserBalanceService {
         }
         return BigDecimal.ZERO;
     }
+
+    @Override
+    public AccountInfo getAccountInfo() {
+        long timestamp = System.currentTimeMillis();
+        String queryString = "timestamp=" + timestamp + "&recvWindow=" + recvWindow;
+
+        String signature = HmacSHA256Utils.sign(queryString, secretKey);
+
+        try {
+            Call<AccountInfo> call = binanceApiService.getAccountInfo(timestamp, recvWindow, signature, apiKey);
+            Response<AccountInfo> response = call.execute();
+            if (response.isSuccessful()) {
+                AccountInfo info = response.body();
+                log.info("AccountInfo: {}", JSON.toJSONString(info));
+                return info;
+            } else {
+                log.error("Failed to get account info: {}", response.errorBody().string());
+            }
+        } catch (Exception e) {
+            log.error("Exception occurred: ", e);
+        }
+        return null;
+    }
+
 
 
 }

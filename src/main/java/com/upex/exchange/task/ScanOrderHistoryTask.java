@@ -17,7 +17,7 @@ import java.util.List;
 
 @Component
 @Slf4j
-public class OrderHistoryTask {
+public class ScanOrderHistoryTask {
 
     @Autowired
     private LeadService leadService;
@@ -30,7 +30,7 @@ public class OrderHistoryTask {
 
     private long lastOrderTime = System.currentTimeMillis();
 
-    @Scheduled(fixedRateString = "${order.history.task.fixedRate:10000}")
+    @Scheduled(fixedRateString = "${order.history.task.fixedRate:300}")
     public void executeOrderHistoryTask() {
         try {
 

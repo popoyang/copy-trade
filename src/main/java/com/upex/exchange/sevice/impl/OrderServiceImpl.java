@@ -3,12 +3,11 @@ package com.upex.exchange.sevice.impl;
 import com.alibaba.fastjson.JSON;
 import com.upex.exchange.Api.BinanceApiService;
 import com.upex.exchange.common.Constants;
-import com.upex.exchange.model.Order;
-import com.upex.exchange.model.OrderResponse;
-import com.upex.exchange.model.PositionRisk;
+import com.upex.exchange.model.*;
+import com.upex.exchange.sevice.ExchangeInfoService;
 import com.upex.exchange.sevice.LeadService;
 import com.upex.exchange.sevice.OrderService;
-import com.upex.exchange.sevice.UserBalanceService;
+import com.upex.exchange.sevice.UserInfoService;
 import com.upex.exchange.util.HmacSHA256Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -33,7 +32,10 @@ public class OrderServiceImpl implements OrderService {
     private LeadService leadService;
 
     @Autowired
-    private UserBalanceService userBalanceService;
+    private UserInfoService userInfoService;
+
+    @Autowired
+    private ExchangeInfoService exchangeInfoService;
 
     @Value("${binance.secretKey}")
     private String secretKey;
@@ -159,49 +161,83 @@ public class OrderServiceImpl implements OrderService {
             return System.currentTimeMillis();
         }
 
-        BigDecimal availableBalance = userBalanceService.getAvailableBalance(Constants.USDT);
-        log.info("Available balance for portfolio {},availableBalance:{}", portfolioId, availableBalance);
+        BigDecimal availableBalance = userInfoService.getAvailableBalance(Constants.USDT);
         if (availableBalance == null || availableBalance.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("Available balance is null or zero for user.");
             return System.currentTimeMillis();
         }
 
+        List<SymbolInfo> symbolInfoList = exchangeInfoService.getSymbolInfo();
+
         for (Order order : orders) {
-            long orderTime = order.getOrderTime();
-            if (orderTime <= lastOrderTime) {
-                continue; // 已处理订单，跳过
-            }
+            if (order.getOrderTime() <= lastOrderTime) continue;
 
             String symbol = order.getSymbol();
             String side = order.getSide();
             double executedQty = order.getExecutedQty();
             String positionSide = order.getPositionSide();
 
+            SymbolFilter lotSizeFilter = exchangeInfoService.getLotSizeFilter(symbol, symbolInfoList);
+            log.info("Processing order: symbol={}, side={}, executedQty={}, positionSide={}", symbol, side, executedQty, positionSide);
+
             if (StringUtils.equalsIgnoreCase(side, Constants.BUY)) {
-                // 计算开仓数量
-                BigDecimal ratio = leadMarginBalance.divide(availableBalance, 4, RoundingMode.HALF_UP);
-                log.info("Processing new order: symbol={}, side={}, executedQty={}, orderTime={}, availableBalance={}，leadMarginBalance={}，ratio={}",
-                        symbol, side, executedQty, orderTime, availableBalance, leadMarginBalance, ratio);
-                BigDecimal openPositionQty = BigDecimal.valueOf(executedQty)
-                        .divide(ratio, 4, RoundingMode.HALF_UP)
-                        .multiply(multiplier);
-                log.info("placeMarketOrder:symbol={}, side={} , side={}, openPositionQty={}", symbol, side, positionSide, openPositionQty);
-                // TODO 如何兼容单向双项持仓
-                placeMarketOrder(symbol,side,Constants.LONG,openPositionQty);
-
-                log.info("Calculated open position quantity: {}", openPositionQty);
+                handleBuyOrder(symbol, executedQty, leadMarginBalance, availableBalance, positionSide, lotSizeFilter);
             } else if (StringUtils.equalsIgnoreCase(side, Constants.SELL)) {
-                PositionRisk positionRisk = getPositionRisk(symbol, positionSide);
-                log.info("positionRisk:{}", JSON.toJSONString(positionRisk));
-                if (positionRisk != null) {
-                    log.info("placeMarketOrder:symbol={}, side={} , side={}, openPositionQty={}", symbol, side, positionSide, new BigDecimal(positionRisk.getPositionAmt()));
-                    // TODO 如何兼容单向双项持仓
-                    placeMarketOrder(symbol,side,Constants.LONG,new BigDecimal(positionRisk.getPositionAmt()));
-                }
-
+                handleSellOrder(symbol, positionSide);
             }
-
         }
+
         return System.currentTimeMillis();
     }
+
+    private void handleBuyOrder(String symbol, double executedQty, BigDecimal leadMarginBalance,
+                                BigDecimal availableBalance, String positionSide, SymbolFilter lotSizeFilter) {
+
+        BigDecimal ratio = leadMarginBalance.divide(availableBalance, 4, RoundingMode.HALF_UP);
+        BigDecimal openQty = BigDecimal.valueOf(executedQty)
+                .divide(ratio, 4, RoundingMode.HALF_UP)
+                .multiply(multiplier);
+        log.info("Buying order for symbol: {}, executedQty:{}, leadMarginBalance:{}, availableBalance:{}, openQty: {},lotSizeFilter:{}", symbol, executedQty, leadMarginBalance, availableBalance, openQty, JSON.toJSONString(lotSizeFilter));
+
+        if (lotSizeFilter != null) {
+            BigDecimal minQty = new BigDecimal(lotSizeFilter.getMinQty());
+            BigDecimal maxQty = new BigDecimal(lotSizeFilter.getMaxQty());
+
+            openQty = openQty.max(minQty).min(maxQty);
+            // 可选：向上取整到 stepSize 精度（防止下单失败）
+            BigDecimal stepSize = new BigDecimal(lotSizeFilter.getStepSize());
+            openQty = roundUpToStepSize(openQty, stepSize);
+            log.info("Buying order for symbol: {}, openQty: {},minQty:{},maxQty:{}", symbol, openQty,minQty,maxQty);
+
+        }
+
+        log.info("Final market order quantity: {} for symbol {}", openQty, symbol);
+
+        if (StringUtils.equalsIgnoreCase(positionSide, Constants.BOTH)) {
+//            placeMarketOrder(symbol, Constants.BUY, Constants.LONG, openQty);
+        } else {
+//            placeMarketOrder(symbol, Constants.BUY, positionSide, openQty);
+        }
+    }
+
+    private void handleSellOrder(String symbol, String positionSide) {
+        PositionRisk positionRisk = getPositionRisk(symbol, positionSide);
+        if (positionRisk != null && new BigDecimal(positionRisk.getPositionAmt()).compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal qty = new BigDecimal(positionRisk.getPositionAmt());
+            log.info("Placing SELL order for symbol={}, qty={}", symbol, qty);
+
+            if (StringUtils.equalsIgnoreCase(positionSide, Constants.BOTH)) {
+//                placeMarketOrder(symbol, Constants.SELL, Constants.SHORT, qty);
+            } else {
+//                placeMarketOrder(symbol, Constants.SELL, positionSide, qty);
+            }
+        }
+    }
+
+    private BigDecimal roundUpToStepSize(BigDecimal qty, BigDecimal stepSize) {
+        return stepSize.compareTo(BigDecimal.ZERO) == 0 ? qty :
+                qty.divide(stepSize, 0, RoundingMode.UP).multiply(stepSize);
+    }
+
+
 }

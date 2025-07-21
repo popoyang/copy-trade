@@ -74,10 +74,5 @@ public class LeadServiceImpl implements LeadService {
 
     }
 
-    public void updateHeaders(Map<String,String> updateHeaders) {
-        log.info("updateUserInfoMap updateHeaders:{}", JSON.toJSONString(updateHeaders));
-        headers = updateHeaders;
-    }
-
 
 }

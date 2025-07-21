@@ -3,7 +3,6 @@ package com.upex.exchange.sevice;
 import com.upex.exchange.model.*;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 public interface LeadService {
 
@@ -20,8 +19,6 @@ public interface LeadService {
      * @return
      */
     BigDecimal getLeadMarginBalance(String portfolioId);
-
-    void updateHeaders(Map<String,String> updateHeaders);
 
 
 }
