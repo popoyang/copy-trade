@@ -30,11 +30,11 @@ public class ScanOrderHistoryTask {
 
     private long lastOrderTime = System.currentTimeMillis();
 
-    @Scheduled(fixedRateString = "${order.history.task.fixedRate:300}")
+    @Scheduled(fixedRateString = "${order.history.task.fixedRate:500}")
     public void executeOrderHistoryTask() {
         try {
 
-            long startTime = System.currentTimeMillis() - 600000;
+            long startTime = System.currentTimeMillis() - 3600000;
             long endTime = LocalDate.now()
                     .atTime(LocalTime.MAX)
                     .atZone(ZoneId.systemDefault())
