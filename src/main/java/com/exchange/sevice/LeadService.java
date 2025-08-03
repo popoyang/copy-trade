@@ -9,6 +9,11 @@ import java.util.Optional;
 
 public interface LeadService {
 
+
+    void updateHeader(String key, String value);
+
+    boolean removeHeader(String key);
+
     /**
      * 获取对应带单员的最新操作记录
      * @param request

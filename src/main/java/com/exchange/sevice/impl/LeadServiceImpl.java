@@ -41,6 +41,20 @@ public class LeadServiceImpl implements LeadService {
         log.info("Headers initialized: {}", JSON.toJSONString(headers));
     }
 
+    public void updateHeader(String key, String value) {
+        headers.put(key, value);
+        log.info("Header updated: key={}, value={}", key, value);
+    }
+
+    public boolean removeHeader(String key) {
+        if (headers.containsKey(key)) {
+            headers.remove(key);
+            log.info("Header removed: key={}", key);
+            return true;
+        }
+        return false;
+    }
+
     public List<Order> getOrderHistoryList(PortfolioQueryRequest request) {
         try {
             log.info("getOrderHistoryList request:{}", JSON.toJSONString(request));
