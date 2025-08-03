@@ -1,6 +1,7 @@
 package com.exchange.sevice.impl;
 
 import com.exchange.common.Constants;
+import com.exchange.common.RedisKeyConstants;
 import com.exchange.model.LeadPosition;
 import com.exchange.sevice.CopyTradeService;
 import com.exchange.sevice.LeadService;
@@ -9,12 +10,13 @@ import com.exchange.sevice.UserInfoService;
 import com.exchange.util.StepSizeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -29,10 +31,13 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     @Autowired
     private RetryOrderService retryOrderService;
 
-    // 缓存上一次的仓位快照，key格式：symbol_positionSide
-    private final Map<String, LeadPosition> lastPositionSnapshots = new HashMap<>();
+    @Autowired
+    @Qualifier("leadPositionRedisTemplate")
+    private RedisTemplate<String, LeadPosition> redisTemplate;
 
-    private final Set<String> pendingCloseSet = ConcurrentHashMap.newKeySet();
+    @Autowired
+    private RedisTemplate<String, String> stringRedisTemplate;
+
 
     public void syncAndReplicatePositions(String portfolioId) {
         List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
@@ -49,13 +54,12 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             String key = getPositionKey(pos);
             currentKeys.add(key);
 
-            LeadPosition lastPos = lastPositionSnapshots.get(key);
+            LeadPosition lastPos = redisTemplate.opsForValue().get(key);
             BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
             BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
             BigDecimal diff = currentQty.subtract(lastQty);
 
             if (diff.compareTo(BigDecimal.ZERO) != 0) {
-                // 第一次需要用到余额时才调用接口获取
                 if (myAvailableMargin == null || leadAvailableMargin == null) {
                     myAvailableMargin = userInfoService.getAvailableMarginBalance(Constants.USDT);
                     leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
@@ -64,7 +68,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                         log.warn("leadAvailableMargin为0，跳过后续下单处理");
                         break;
                     }
-                    ratio = myAvailableMargin.divide(leadAvailableMargin, 8, BigDecimal.ROUND_DOWN);
+                    ratio = myAvailableMargin.divide(leadAvailableMargin, 8, RoundingMode.DOWN);
                 }
 
                 BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(pos.getSymbol(), diff.abs().multiply(ratio));
@@ -81,11 +85,10 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 }
             }
 
-            // 不论是否下单，都更新快照
-            lastPositionSnapshots.put(key, pos);
+            // 存入 Redis 作为快照
+            redisTemplate.opsForValue().set(key, pos);
         }
 
-        // 归零平仓处理时，若之前没调用过余额接口，这里补调用一次
         if (myAvailableMargin == null || leadAvailableMargin == null) {
             myAvailableMargin = userInfoService.getAvailableMarginBalance(Constants.USDT);
             leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
@@ -94,16 +97,22 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     }
 
     private void handleZeroPositions(Set<String> currentKeys, BigDecimal myMargin, BigDecimal leadMargin) {
-        for (String key : lastPositionSnapshots.keySet()) {
-            if (currentKeys.contains(key)) continue;
+        Set<String> allKeys = redisTemplate.keys(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + "*");
+        if (allKeys == null) return;
 
-            //若已在等待平仓中，跳过
-            if (pendingCloseSet.contains(key)) {
-                log.info("仓位 {} 已在等待延迟平仓中，跳过", key);
+        for (String redisKey : allKeys) {
+            String simpleKey = redisKey.replace(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH, "");
+            if (currentKeys.contains(simpleKey)) continue;
+
+            Boolean isPending = stringRedisTemplate.opsForSet().isMember(RedisKeyConstants.PENDING_CLOSE_SET, simpleKey);
+            if (Boolean.TRUE.equals(isPending)) {
+                log.info("仓位 {} 已在等待延迟平仓中，跳过", simpleKey);
                 continue;
             }
 
-            LeadPosition lastPos = lastPositionSnapshots.get(key);
+            LeadPosition lastPos = redisTemplate.opsForValue().get(redisKey);
+            if (lastPos == null) continue;
+
             BigDecimal quantity = new BigDecimal(lastPos.getPositionAmount());
             if (quantity.compareTo(BigDecimal.ZERO) != 0 && leadMargin.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(
@@ -115,29 +124,24 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                     log.info("[归零平仓处理] symbol={} positionSide={} 原持仓数量={} 下单数量={}",
                             lastPos.getSymbol(), lastPos.getPositionSide(), quantity, myOrderQty);
 
-                    // 加入等待列表
-                    pendingCloseSet.add(key);
+                    stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET, simpleKey);
 
-                    // 提交延迟任务，延迟中完成状态清理
                     retryOrderService.submitDelayedClose(
-                            lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty,key,(k, closed) -> {
-                                // 始终移除等待集合
-                                pendingCloseSet.remove(k);
-                                // 只有在真正执行了平仓，才移除 snapshot
+                            lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty, simpleKey,
+                            (k, closed) -> {
+                                stringRedisTemplate.opsForSet().remove(RedisKeyConstants.PENDING_CLOSE_SET, k);
                                 if (closed) {
-                                    lastPositionSnapshots.remove(k);
-                                    log.info("延迟平仓完成并移除快照：{}", k);
+                                    redisTemplate.delete(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + k);
+                                    log.info("延迟平仓完成并删除Redis快照：{}", k);
                                 } else {
-                                    log.info("延迟平仓被取消，快照保留：{}", k);
+                                    log.info("延迟平仓被取消，Redis快照保留：{}", k);
                                 }
                             }
                     );
-
                 }
             }
         }
     }
-
 
     private String getOrderSide(String positionSide, boolean isOpen) {
         if ("LONG".equalsIgnoreCase(positionSide)) {
@@ -145,11 +149,10 @@ public class CopyTradeServiceImpl implements CopyTradeService {
         } else if ("SHORT".equalsIgnoreCase(positionSide)) {
             return isOpen ? "SELL" : "BUY";
         }
-        // 单向持仓BOTH场景，默认以 diff 正负判断买卖方向
         return isOpen ? "BUY" : "SELL";
     }
 
     private String getPositionKey(LeadPosition pos) {
-        return pos.getSymbol() + "_" + pos.getPositionSide();
+        return RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + pos.getSymbol() + "_" + pos.getPositionSide();
     }
 }

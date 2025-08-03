@@ -2,10 +2,12 @@ package com.exchange.model;
 
 import lombok.Data;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 
 @Data
-public class LeadPosition {
+public class LeadPosition implements Serializable {
+    private static final long serialVersionUID = -2256478421690187884L;
     private String id;
     /**
      * 合约交易对，如 ONDOUSDT
