@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -25,16 +24,24 @@ public class RedisConfig {
         return template;
     }
 
+
     @Bean
     public RedisTemplate<String, LeadPosition> leadPositionRedisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, LeadPosition> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
         Jackson2JsonRedisSerializer<LeadPosition> serializer = new Jackson2JsonRedisSerializer<>(LeadPosition.class);
-        template.setDefaultSerializer(serializer);
+        ObjectMapper om = new ObjectMapper();
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        om.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.PROPERTY);
+        serializer.setObjectMapper(om);
+
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);
-        template.setHashKeySerializer(new StringRedisSerializer());
+        template.afterPropertiesSet();
+
         return template;
     }
 

@@ -32,8 +32,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     private RetryOrderService retryOrderService;
 
     @Autowired
-    @Qualifier("leadPositionRedisTemplate")
-    private RedisTemplate<String, LeadPosition> redisTemplate;
+    private RedisTemplate<String, LeadPosition> leadPositionRedisTemplate;
 
     @Autowired
     private RedisTemplate<String, String> stringRedisTemplate;
@@ -54,7 +53,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             String key = getPositionKey(pos);
             currentKeys.add(key);
 
-            LeadPosition lastPos = redisTemplate.opsForValue().get(key);
+            LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
             BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
             BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
             BigDecimal diff = currentQty.subtract(lastQty);
@@ -86,7 +85,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             }
 
             // 存入 Redis 作为快照
-            redisTemplate.opsForValue().set(key, pos);
+            leadPositionRedisTemplate.opsForValue().set(key, pos);
         }
 
         if (myAvailableMargin == null || leadAvailableMargin == null) {
@@ -97,7 +96,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     }
 
     private void handleZeroPositions(Set<String> currentKeys, BigDecimal myMargin, BigDecimal leadMargin) {
-        Set<String> allKeys = redisTemplate.keys(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + "*");
+        Set<String> allKeys = leadPositionRedisTemplate.keys(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + "*");
         if (allKeys == null) return;
 
         for (String redisKey : allKeys) {
@@ -110,7 +109,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 continue;
             }
 
-            LeadPosition lastPos = redisTemplate.opsForValue().get(redisKey);
+            LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(redisKey);
             if (lastPos == null) continue;
 
             BigDecimal quantity = new BigDecimal(lastPos.getPositionAmount());
@@ -131,7 +130,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                             (k, closed) -> {
                                 stringRedisTemplate.opsForSet().remove(RedisKeyConstants.PENDING_CLOSE_SET, k);
                                 if (closed) {
-                                    redisTemplate.delete(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + k);
+                                    leadPositionRedisTemplate.delete(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + k);
                                     log.info("延迟平仓完成并删除Redis快照：{}", k);
                                 } else {
                                     log.info("延迟平仓被取消，Redis快照保留：{}", k);
