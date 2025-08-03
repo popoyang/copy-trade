@@ -86,6 +86,14 @@ public class UserInfoServiceImpl implements UserInfoService {
         return null;
     }
 
+    @Override
+    public BigDecimal getAvailableMarginBalance(String usdt) {
+        AccountInfo accountInfo = getAccountInfo();
+        if (accountInfo == null) {
+            return BigDecimal.ZERO;
+        }
+        return accountInfo.getAvailableBalance();
+    }
 
 
 }

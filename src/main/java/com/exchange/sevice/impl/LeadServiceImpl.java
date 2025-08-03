@@ -79,7 +79,6 @@ public class LeadServiceImpl implements LeadService {
         try {
             log.info("getLeadPositions portfolioId:{}", portfolioId);
             String response = HttpUtils.httpGet(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_POSITIONS+portfolioId, headers);
-            log.info("getLeadPositions response: {}", response);
             return JsonUtils.parseResponse(response, new TypeReference<ApiResponse<List<LeadPosition>>>() {
             });
         } catch (IOException e) {

@@ -9,6 +9,7 @@ import com.exchange.sevice.LeadService;
 import com.exchange.sevice.OrderService;
 import com.exchange.sevice.UserInfoService;
 import com.exchange.util.HmacSHA256Utils;
+import com.exchange.util.StepSizeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,7 +76,7 @@ public class OrderServiceImpl implements OrderService {
                     side,
                     positionSide,
                     "MARKET",
-                    quantity.toPlainString(),
+                    quantity.stripTrailingZeros().toPlainString(),
                     serverTime,
                     signature,
                     recvWindow,
@@ -90,7 +91,6 @@ public class OrderServiceImpl implements OrderService {
             } else {
                 log.error("Binance order failed: {}", response.errorBody() != null ? response.errorBody().string() : "unknown error");
             }
-
         } catch (Exception e) {
             log.error("Exception while placing Binance order", e);
         }

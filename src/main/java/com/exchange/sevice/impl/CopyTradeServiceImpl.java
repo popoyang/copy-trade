@@ -37,11 +37,13 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     public void syncAndReplicatePositions(String portfolioId) {
         List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
         List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
+        log.info("syncAndReplicatePositions active positions: {}", activePositions);
 
         Set<String> currentKeys = new HashSet<>();
 
-        BigDecimal myAvailableMargin = userInfoService.getAvailableBalance(Constants.USDT);
-        BigDecimal leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
+        BigDecimal myAvailableMargin = null;
+        BigDecimal leadAvailableMargin = null;
+        BigDecimal ratio = null;
 
         for (LeadPosition pos : activePositions) {
             String key = getPositionKey(pos);
@@ -53,7 +55,18 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             BigDecimal diff = currentQty.subtract(lastQty);
 
             if (diff.compareTo(BigDecimal.ZERO) != 0) {
-                BigDecimal ratio = myAvailableMargin.divide(leadAvailableMargin, 8, BigDecimal.ROUND_DOWN);
+                // 第一次需要用到余额时才调用接口获取
+                if (myAvailableMargin == null || leadAvailableMargin == null) {
+                    myAvailableMargin = userInfoService.getAvailableMarginBalance(Constants.USDT);
+                    leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
+
+                    if (leadAvailableMargin.compareTo(BigDecimal.ZERO) == 0) {
+                        log.warn("leadAvailableMargin为0，跳过后续下单处理");
+                        break;
+                    }
+                    ratio = myAvailableMargin.divide(leadAvailableMargin, 8, BigDecimal.ROUND_DOWN);
+                }
+
                 BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(pos.getSymbol(), diff.abs().multiply(ratio));
 
                 if (myOrderQty.compareTo(BigDecimal.ZERO) == 0) {
@@ -68,11 +81,15 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 }
             }
 
-            // 不管是否下单，都更新快照
+            // 不论是否下单，都更新快照
             lastPositionSnapshots.put(key, pos);
         }
 
-        // 处理归零且未出现在本次快照的仓位，延迟平仓等
+        // 归零平仓处理时，若之前没调用过余额接口，这里补调用一次
+        if (myAvailableMargin == null || leadAvailableMargin == null) {
+            myAvailableMargin = userInfoService.getAvailableMarginBalance(Constants.USDT);
+            leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
+        }
         handleZeroPositions(currentKeys, myAvailableMargin, leadAvailableMargin);
     }
 

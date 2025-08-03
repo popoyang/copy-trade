@@ -18,4 +18,6 @@ public interface UserInfoService {
      * @return 账户信息
      */
     AccountInfo getAccountInfo();
+
+    BigDecimal getAvailableMarginBalance(String usdt);
 }
