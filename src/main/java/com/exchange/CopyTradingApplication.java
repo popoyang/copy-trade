@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @SpringBootApplication
 @EnableConfigurationProperties({BaseurlConfig.class})
-@RetrofitScan("com.upex.exchange")
+@RetrofitScan("com.exchange")
 public class CopyTradingApplication {
 
 	public static void main(String[] args) {

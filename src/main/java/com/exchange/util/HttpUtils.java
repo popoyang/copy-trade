@@ -50,6 +50,15 @@ public class HttpUtils {
     public static String httpGet(String url,Map<String, String> headers) throws IOException {
         CloseableHttpClient client = HttpClients.createDefault();
         HttpGet request = new HttpGet(url);
+        request.setHeader("Content-Type","application/json");
+        request.setHeader("clienttype","web");
+        if (headers != null) {
+            headers.forEach((key, value) -> {
+                if (StringUtils.isNotBlank(value)) {
+                    request.setHeader(key, value);
+                }
+            });
+        }
         RequestConfig.custom().setConnectTimeout(Constants.CUSTOM_TIMEOUT).setSocketTimeout(Constants.SOCKET_TIMEOUT).build();
 
         CloseableHttpResponse response = client.execute(request);
