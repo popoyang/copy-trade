@@ -2,7 +2,6 @@ package com.exchange.api;
 
 import com.exchange.model.*;
 import com.github.lianjiatech.retrofit.spring.boot.core.RetrofitClient;
-import com.upex.exchange.model.*;
 import retrofit2.Call;
 import retrofit2.http.*;
 
