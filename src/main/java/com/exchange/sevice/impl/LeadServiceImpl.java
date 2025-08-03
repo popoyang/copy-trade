@@ -5,7 +5,6 @@ import com.alibaba.fastjson.TypeReference;
 import com.exchange.common.UrlConstants;
 import com.exchange.config.BaseurlConfig;
 import com.exchange.model.*;
-import com.upex.exchange.model.*;
 import com.exchange.sevice.LeadService;
 import com.exchange.util.HttpUtils;
 import com.exchange.util.JsonUtils;

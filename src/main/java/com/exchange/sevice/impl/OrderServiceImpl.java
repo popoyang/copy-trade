@@ -4,7 +4,6 @@ import com.alibaba.fastjson.JSON;
 import com.exchange.api.BinanceApiService;
 import com.exchange.common.Constants;
 import com.exchange.model.*;
-import com.upex.exchange.model.*;
 import com.exchange.sevice.ExchangeInfoService;
 import com.exchange.sevice.LeadService;
 import com.exchange.sevice.OrderService;
