@@ -156,6 +156,48 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public BigDecimal getMyPositionQuantity(String symbol, String positionSide) {
+        if (StringUtils.isBlank(symbol) || StringUtils.isBlank(positionSide)) {
+            log.warn("getMyPositionQuantity Invalid parameters: symbol or positionSide is blank.");
+            return null;
+        }
+
+        try {
+            long timestamp = System.currentTimeMillis();
+            String queryString = "timestamp=" + timestamp + "&recvWindow=" + recvWindow;
+            String signature = HmacSHA256Utils.sign(queryString, secretKey);
+
+            log.info("getMyPositionQuantity Fetching position risk for symbol: {}, positionSide: {}", symbol, positionSide);
+
+            Call<List<PositionRisk>> call = binanceApiService.getPositionRisk(timestamp, recvWindow, signature, apiKey);
+            Response<List<PositionRisk>> response = call.execute();
+
+            if (!response.isSuccessful()) {
+                String errorBody = response.errorBody() != null ? response.errorBody().string() : "null";
+                log.error("getMyPositionQuantity Failed to fetch position risk. Code: {}, Body: {}", response.code(), errorBody);
+                return BigDecimal.ZERO;
+            }
+
+            List<PositionRisk> positionRisks = response.body();
+            if (positionRisks == null || positionRisks.isEmpty()) {
+                return BigDecimal.ZERO;
+            }
+
+            for (PositionRisk positionRisk : positionRisks) {
+                if (symbol.equals(positionRisk.getSymbol())) {
+                    return new BigDecimal(positionRisk.getPositionAmt()).abs(); // 返回绝对值
+                }
+            }
+
+
+        } catch (Exception e) {
+            log.error("Exception while fetching Binance position risk", e);
+        }
+
+        return BigDecimal.ZERO;
+    }
+
+    @Override
     public long processOrders(List<Order> orders, String portfolioId, long lastOrderTime) {
         BigDecimal leadMarginBalance = leadService.getLeadMarginBalance(portfolioId);
         if (leadMarginBalance == null) {

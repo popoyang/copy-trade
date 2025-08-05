@@ -30,6 +30,15 @@ public interface OrderService {
      */
     PositionRisk getPositionRisk(String symbol, String positionSide);
 
+
+    /**
+     * 获取仓位数量
+     * @param symbol 币种
+     * @param positionSide
+     * @return 仓位数据
+     */
+    BigDecimal getMyPositionQuantity(String symbol, String positionSide);
+
     /**
      * 处理订单数据
      * @param orders 订单
