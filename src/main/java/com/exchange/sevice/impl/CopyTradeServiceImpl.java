@@ -109,7 +109,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
             BigDecimal quantity = new BigDecimal(lastPos.getPositionAmount());
 
-            if (quantity.compareTo(BigDecimal.ZERO) == 0) {
+            if (quantity.compareTo(BigDecimal.ZERO) != 0) {
                 BigDecimal myOrderQty = orderService.getMyPositionQuantity(lastPos.getSymbol(), lastPos.getPositionSide());
 
                 // 根据 stepSize 进行截断
