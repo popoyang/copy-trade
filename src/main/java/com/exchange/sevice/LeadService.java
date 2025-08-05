@@ -52,4 +52,6 @@ public interface LeadService {
     Optional<LeadPosition> getPositionBySymbol(List<LeadPosition> leadPositions, String symbol);
 
     LeadPosition getPositionBySymbolAndSide(String portfolioId, String symbol, String positionSide);
+
+    LeadPosition getPositionBySymbolAndSide(List<LeadPosition> leadPositions,String symbol, String positionSide);
 }

@@ -87,10 +87,10 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             leadPositionRedisTemplate.opsForValue().set(key, pos);
         }
 
-        handleZeroPositions(currentKeys);
+        handleZeroPositions(currentKeys,currentPositions);
     }
 
-    private void handleZeroPositions(Set<String> currentKeys) {
+    private void handleZeroPositions(Set<String> currentKeys,List<LeadPosition> currentPositions) {
         Set<String> allKeys = leadPositionRedisTemplate.keys(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + "*");
         if (allKeys == null || allKeys.isEmpty()) return;
 
@@ -107,33 +107,40 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(redisKey);
             if (lastPos == null) continue;
 
-            BigDecimal myOrderQty = orderService.getMyPositionQuantity(lastPos.getSymbol(), lastPos.getPositionSide());
+            LeadPosition latestPos = leadService.getPositionBySymbolAndSide(currentPositions, lastPos.getSymbol(), lastPos.getPositionSide());
+            BigDecimal latestQty = latestPos != null ? new BigDecimal(latestPos.getPositionAmount()) : BigDecimal.ZERO;
 
-            // 根据 stepSize 进行截断
-            myOrderQty = StepSizeUtil.trimToStepSize(lastPos.getSymbol(), myOrderQty);
+            // 若最新仓位仍为0或不存在，确认平仓数量执行下单
+            if (latestQty.compareTo(BigDecimal.ZERO) == 0) {
+                BigDecimal myOrderQty = orderService.getMyPositionQuantity(lastPos.getSymbol(), lastPos.getPositionSide());
 
-            if (myOrderQty.compareTo(BigDecimal.ZERO) > 0) {
-                log.info("[归零平仓处理] symbol={} positionSide={} 我方当前持仓数量={}，将尝试市价平仓",
-                        lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty);
+                // 根据 stepSize 进行截断
+                myOrderQty = StepSizeUtil.trimToStepSize(lastPos.getSymbol(), myOrderQty);
 
-                // 加入等待中
-                stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET, simpleKey);
+                if (myOrderQty.compareTo(BigDecimal.ZERO) > 0) {
+                    log.info("[归零平仓处理] symbol={} positionSide={} 我方当前持仓数量={}，将尝试市价平仓",
+                            lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty);
 
-                retryOrderService.submitDelayedClose(
-                        lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty, simpleKey,
-                        (k, closed) -> {
-                            stringRedisTemplate.opsForSet().remove(RedisKeyConstants.PENDING_CLOSE_SET, k);
-                            if (closed) {
-                                leadPositionRedisTemplate.delete(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + k);
-                                log.info("延迟平仓完成并删除Redis快照：{}", k);
-                            } else {
-                                log.warn("延迟平仓未完成，保留Redis快照：{}", k);
+                    // 加入等待中
+                    stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET, simpleKey);
+
+                    retryOrderService.submitDelayedClose(
+                            lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty, simpleKey,
+                            (k, closed) -> {
+                                stringRedisTemplate.opsForSet().remove(RedisKeyConstants.PENDING_CLOSE_SET, k);
+                                if (closed) {
+                                    leadPositionRedisTemplate.delete(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + k);
+                                    log.info("延迟平仓完成并删除Redis快照：{}", k);
+                                } else {
+                                    log.warn("延迟平仓未完成，保留Redis快照：{}", k);
+                                }
                             }
-                        }
-                );
-            } else {
-                log.debug("归零平仓检查: 我方已无持仓，跳过 symbol={} positionSide={}", lastPos.getSymbol(), lastPos.getPositionSide());
+                    );
+                } else {
+                    log.debug("归零平仓检查: 我方已无持仓，跳过 symbol={} positionSide={}", lastPos.getSymbol(), lastPos.getPositionSide());
+                }
             }
+
 
         }
     }

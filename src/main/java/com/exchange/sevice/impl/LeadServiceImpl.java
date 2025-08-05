@@ -142,6 +142,21 @@ public class LeadServiceImpl implements LeadService {
         return null;
     }
 
+    @Override
+    public LeadPosition getPositionBySymbolAndSide(List<LeadPosition> leadPositions, String symbol, String positionSide) {
+        if (leadPositions == null || leadPositions.isEmpty()) {
+            return null;
+        }
+
+        for (LeadPosition pos : leadPositions) {
+            if (symbol.equalsIgnoreCase(pos.getSymbol())
+                    && positionSide.equalsIgnoreCase(pos.getPositionSide())
+                    && pos.hasPosition()) {  // 过滤掉仓位为0的
+                return pos;
+            }
+        }
+        return null;
+    }
 
 
 }
