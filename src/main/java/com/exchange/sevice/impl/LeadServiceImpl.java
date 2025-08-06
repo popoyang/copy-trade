@@ -2,6 +2,7 @@ package com.exchange.sevice.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
+import com.exchange.common.RedisKeyConstants;
 import com.exchange.common.UrlConstants;
 import com.exchange.config.BaseurlConfig;
 import com.exchange.model.*;
@@ -11,14 +12,15 @@ import com.exchange.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
 
 @Slf4j
 @Service
@@ -33,32 +35,47 @@ public class LeadServiceImpl implements LeadService {
     @Value("${binance.cookie}")
     private String cookie;
 
-    private Map<String,String> headers = new ConcurrentHashMap<>();
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
     @PostConstruct
     public void initHeaders() {
-        headers.put("csrftoken", csrftoken);
-        headers.put("Cookie", cookie);
-        log.info("Headers initialized: {}", JSON.toJSONString(headers));
+        stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, "csrftoken", csrftoken);
+        stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, "Cookie", cookie);
+        log.info("Headers initialized: {}", stringRedisTemplate.opsForHash().entries(RedisKeyConstants.REDIS_HEADER_KEY));
     }
 
     public void updateHeader(String key, String value) {
-        headers.put(key, value);
-        log.info("Header updated: key={}, value={}", key, value);
+        stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, key, value);
+        log.info("Header updated in Redis: key={}, value={}", key, value);
     }
 
     public boolean removeHeader(String key) {
-        if (headers.containsKey(key)) {
-            headers.remove(key);
-            log.info("Header removed: key={}", key);
+        Boolean result = stringRedisTemplate.opsForHash().hasKey(RedisKeyConstants.REDIS_HEADER_KEY, key);
+        if (Boolean.TRUE.equals(result)) {
+            stringRedisTemplate.opsForHash().delete(RedisKeyConstants.REDIS_HEADER_KEY, key);
+            log.info("Header removed from Redis: key={}", key);
             return true;
         }
         return false;
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, String> getHeadersFromRedis() {
+        Map<Object, Object> rawMap = stringRedisTemplate.opsForHash().entries(RedisKeyConstants.REDIS_HEADER_KEY);
+        return rawMap.entrySet()
+                .stream()
+                .filter(e -> e.getKey() != null && e.getValue() != null)
+                .collect(Collectors.toMap(
+                        e -> e.getKey().toString(),
+                        e -> e.getValue().toString()
+                ));
+    }
+
     public List<Order> getOrderHistoryList(PortfolioQueryRequest request) {
         try {
             log.info("getOrderHistoryList request:{}", JSON.toJSONString(request));
-            String response = HttpUtils.httpPost(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_ORDER_HISTORY, JSON.toJSONString(request),headers);
+            String response = HttpUtils.httpPost(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_ORDER_HISTORY, JSON.toJSONString(request),getHeadersFromRedis());
             log.info("getOrderHistoryList response: {}", response);
             OrderHistory orderHistory = JsonUtils.parseResponse(response, new TypeReference<ApiResponse<OrderHistory>>() {});
 
@@ -74,7 +91,7 @@ public class LeadServiceImpl implements LeadService {
     public BigDecimal getLeadMarginBalance(String portfolioId) {
         try {
             log.info("getLeadMarginBalance portfolioId:{}", portfolioId);
-            String response = HttpUtils.httpGet(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_DETAIL+portfolioId, headers);
+            String response = HttpUtils.httpGet(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_DETAIL+portfolioId, getHeadersFromRedis());
             log.info("getLeadMarginBalance response: {}", response);
             LeadPortfolioDetail leadPortfolioDetail = JsonUtils.parseResponse(response, new TypeReference<ApiResponse<LeadPortfolioDetail>>() {
             });
@@ -92,7 +109,7 @@ public class LeadServiceImpl implements LeadService {
     public List<LeadPosition> getLeadPositions(String portfolioId) {
         try {
             log.info("getLeadPositions portfolioId:{}", portfolioId);
-            String response = HttpUtils.httpGet(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_POSITIONS+portfolioId, headers);
+            String response = HttpUtils.httpGet(baseurlConfig.getWebUrl()+UrlConstants.COPY_TRADE_POSITIONS+portfolioId, getHeadersFromRedis());
             return JsonUtils.parseResponse(response, new TypeReference<ApiResponse<List<LeadPosition>>>() {
             });
         } catch (IOException e) {
