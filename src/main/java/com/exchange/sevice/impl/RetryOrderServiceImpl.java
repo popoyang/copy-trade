@@ -1,5 +1,6 @@
 package com.exchange.sevice.impl;
 
+import com.exchange.enums.AccountType;
 import com.exchange.model.LeadPosition;
 import com.exchange.model.OrderResponse;
 import com.exchange.sevice.ClosePositionCallback;
@@ -38,10 +39,10 @@ public class RetryOrderServiceImpl implements RetryOrderService {
 
 
     @Override
-    public void placeMarketOrderWithRetry(String symbol, String side, String positionSide, BigDecimal quantity) {
+    public void placeMarketOrderWithRetry(AccountType accountType, String symbol, String side, String positionSide, BigDecimal quantity) {
         for (int i = 1; i <= maxRetryTimes; i++) {
             try {
-                OrderResponse response = orderService.placeMarketOrder(symbol, side, positionSide, quantity);
+                OrderResponse response = orderService.placeMarketOrder(accountType,symbol, side, positionSide, quantity);
                 if (response != null && response.getOrderId() != null) {
                     log.info("下单成功：symbol={} side={} posSide={} qty={} 订单ID={}",
                             symbol, side, positionSide, quantity, response.getOrderId());
@@ -61,7 +62,7 @@ public class RetryOrderServiceImpl implements RetryOrderService {
     }
 
     @Override
-    public void submitDelayedClose(String symbol, String positionSide, BigDecimal quantity, String key, ClosePositionCallback callback) {
+    public void submitDelayedClose(AccountType accountType,String symbol, String positionSide, BigDecimal quantity, String key, ClosePositionCallback callback) {
         // 新线程异步处理延迟平仓，防止阻塞调用线程
         new Thread(() -> {
             boolean closed = false;
@@ -77,7 +78,8 @@ public class RetryOrderServiceImpl implements RetryOrderService {
                     log.info("[延迟平仓确认] symbol={} positionSide={} 下单数量={}", symbol, positionSide, quantity);
 
                     // 下单，带重试
-                    placeMarketOrderWithRetry(symbol,
+                    placeMarketOrderWithRetry(accountType,
+                            symbol,
                             getCloseSide(positionSide),
                             positionSide,
                             quantity);

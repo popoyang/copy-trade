@@ -1,11 +1,9 @@
 package com.exchange.sevice;
 
-import com.exchange.model.Order;
+import com.exchange.enums.AccountType;
 import com.exchange.model.OrderResponse;
-import com.exchange.model.PositionRisk;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 public interface OrderService {
 
@@ -17,34 +15,17 @@ public interface OrderService {
      * @param quantity
      * @return
      */
-    OrderResponse placeMarketOrder(String symbol,
+    OrderResponse placeMarketOrder(AccountType accountType,
+                                   String symbol,
                                    String side,
                                    String positionSide,
                                    BigDecimal quantity);
-
-    /**
-     * 获取仓位数据
-     * @param symbol 币种
-     * @param positionSide
-     * @return 仓位数据
-     */
-    PositionRisk getPositionRisk(String symbol, String positionSide);
-
-
     /**
      * 获取仓位数量
      * @param symbol 币种
      * @param positionSide
      * @return 仓位数据
      */
-    BigDecimal getMyPositionQuantity(String symbol, String positionSide);
+    BigDecimal getMyPositionQuantity(AccountType accountType,String symbol, String positionSide);
 
-    /**
-     * 处理订单数据
-     * @param orders 订单
-     * @param portfolioId 点单员 portfolioId
-     * @param lastOrderTime 最新订单时间
-     * @return 最新订单时间
-     */
-    long processOrders(List<Order> orders, String portfolioId, long lastOrderTime);
 }

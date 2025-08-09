@@ -2,11 +2,13 @@ package com.exchange.sevice.impl;
 
 import com.exchange.common.Constants;
 import com.exchange.common.RedisKeyConstants;
+import com.exchange.enums.AccountType;
 import com.exchange.model.LeadPosition;
 import com.exchange.sevice.*;
 import com.exchange.util.StepSizeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -36,8 +38,11 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     @Autowired
     private RedisTemplate<String, String> stringRedisTemplate;
 
+    @Value("${account.ratioMultiplier:2}")
+    private BigDecimal ratioMultiplier;
 
-    public void syncAndReplicatePositions(String portfolioId) {
+
+    public void syncAndReplicatePositions(String portfolioId,AccountType accountType) {
         List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
         List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
         log.info("syncAndReplicatePositions active positions: {}", activePositions);
@@ -59,14 +64,14 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
             if (diff.compareTo(BigDecimal.ZERO) != 0) {
                 if (myAvailableMargin == null || leadAvailableMargin == null) {
-                    myAvailableMargin = userInfoService.getAvailableMarginBalance(Constants.USDT);
+                    myAvailableMargin = userInfoService.getAvailableMarginBalance(accountType,Constants.USDT);
                     leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
 
                     if (leadAvailableMargin.compareTo(BigDecimal.ZERO) == 0) {
                         log.warn("leadAvailableMargin为0，跳过后续下单处理");
                         break;
                     }
-                    ratio = myAvailableMargin.divide(leadAvailableMargin, 8, RoundingMode.DOWN);
+                    ratio =calculateRatio(accountType, myAvailableMargin, leadAvailableMargin);
                 }
 
                 BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(pos.getSymbol(), diff.abs().multiply(ratio));
@@ -78,8 +83,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                     log.info("[复刻下单] symbol={} positionSide={} lastQty={} currentQty={} diff={} 下单数量={}",
                             pos.getSymbol(), pos.getPositionSide(), lastQty, currentQty, diff, myOrderQty);
 
-                    retryOrderService.placeMarketOrderWithRetry(
-                            pos.getSymbol(), side, pos.getPositionSide(), myOrderQty);
+                    retryOrderService.placeMarketOrderWithRetry(accountType, pos.getSymbol(), side, pos.getPositionSide(), myOrderQty);
                 }
             }
 
@@ -87,10 +91,10 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             leadPositionRedisTemplate.opsForValue().set(key, pos);
         }
 
-        handleZeroPositions(currentKeys,currentPositions);
+        handleZeroPositions(accountType,currentKeys,currentPositions);
     }
 
-    private void handleZeroPositions(Set<String> currentKeys,List<LeadPosition> currentPositions) {
+    private void handleZeroPositions(AccountType accountType,Set<String> currentKeys,List<LeadPosition> currentPositions) {
         Set<String> allKeys = leadPositionRedisTemplate.keys(RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + "*");
         if (allKeys == null || allKeys.isEmpty()) return;
 
@@ -112,7 +116,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
             // 若最新仓位仍为0或不存在，确认平仓数量执行下单
             if (latestQty.compareTo(BigDecimal.ZERO) == 0) {
-                BigDecimal myOrderQty = orderService.getMyPositionQuantity(lastPos.getSymbol(), lastPos.getPositionSide());
+                BigDecimal myOrderQty = orderService.getMyPositionQuantity(accountType,lastPos.getSymbol(), lastPos.getPositionSide());
 
                 // 根据 stepSize 进行截断
                 myOrderQty = StepSizeUtil.trimToStepSize(lastPos.getSymbol(), myOrderQty);
@@ -124,7 +128,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                     // 加入等待中
                     stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET, simpleKey);
 
-                    retryOrderService.submitDelayedClose(
+                    retryOrderService.submitDelayedClose(accountType,
                             lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty, simpleKey,
                             (k, closed) -> {
                                 stringRedisTemplate.opsForSet().remove(RedisKeyConstants.PENDING_CLOSE_SET, k);
@@ -158,4 +162,14 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     private String getPositionKey(LeadPosition pos) {
         return RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH + pos.getSymbol() + "_" + pos.getPositionSide();
     }
+
+    public BigDecimal calculateRatio(AccountType accountType, BigDecimal myAvailableMargin, BigDecimal leadAvailableMargin) {
+        BigDecimal baseRatio = myAvailableMargin.divide(leadAvailableMargin, 8, RoundingMode.DOWN);
+        if (accountType == AccountType.MAIN) {
+            return baseRatio;
+        } else {
+            return baseRatio.multiply(ratioMultiplier);
+        }
+    }
+
 }

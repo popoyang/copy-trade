@@ -2,6 +2,9 @@ package com.exchange.sevice.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.exchange.api.BinanceApiService;
+import com.exchange.config.BinanceAccount;
+import com.exchange.config.BinanceAccountsConfig;
+import com.exchange.enums.AccountType;
 import com.exchange.model.AccountInfo;
 import com.exchange.model.BalanceResponse;
 import com.exchange.sevice.UserInfoService;
@@ -24,25 +27,32 @@ public class UserInfoServiceImpl implements UserInfoService {
     @Autowired
     private BinanceApiService binanceApiService;
 
-    @Value("${binance.secretKey}")
-    private String secretKey;
+    @Autowired
+    private BinanceAccountsConfig accountsConfig;
 
-    @Value("${binance.api.apiKey}")
-    private String apiKey;
+    private BinanceAccount getAccount(AccountType accountType) {
+        switch(accountType) {
+            case SECOND:
+                return accountsConfig.getSecond();
+            case MAIN:
+            default:
+                return accountsConfig.getMain();
+        }
+    }
 
     @Value("${binance.api.recvWindow:5000}")
     private long recvWindow;
 
     @Override
-    public BigDecimal getAvailableBalance(String asset) {
+    public BigDecimal getAvailableBalance(AccountType accountType,String asset) {
         try {
             //生成签名
             long timestamp  = System.currentTimeMillis();
             String query = "timestamp=" + timestamp;
-            String signature = HmacSHA256Utils.sign(query, secretKey);
+            String signature = HmacSHA256Utils.sign(query, getAccount(accountType).getSecretKey());
 
             // 调用获取余额接口
-            Call<List<BalanceResponse>> call = binanceApiService.getFuturesBalance(timestamp, signature, apiKey);
+            Call<List<BalanceResponse>> call = binanceApiService.getFuturesBalance(timestamp, signature, getAccount(accountType).getApiKey());
             Response<List<BalanceResponse>> response = call.execute();
 
             log.info("getAvailableBalance Response: {}", JSON.toJSONString(response.body()));
@@ -64,14 +74,14 @@ public class UserInfoServiceImpl implements UserInfoService {
     }
 
     @Override
-    public AccountInfo getAccountInfo() {
+    public AccountInfo getAccountInfo(AccountType accountType) {
         long timestamp = System.currentTimeMillis();
         String queryString = "timestamp=" + timestamp + "&recvWindow=" + recvWindow;
 
-        String signature = HmacSHA256Utils.sign(queryString, secretKey);
+        String signature = HmacSHA256Utils.sign(queryString, getAccount(accountType).getSecretKey());
 
         try {
-            Call<AccountInfo> call = binanceApiService.getAccountInfo(timestamp, recvWindow, signature, apiKey);
+            Call<AccountInfo> call = binanceApiService.getAccountInfo(timestamp, recvWindow, signature, getAccount(accountType).getApiKey());
             Response<AccountInfo> response = call.execute();
             if (response.isSuccessful()) {
                 AccountInfo info = response.body();
@@ -87,8 +97,8 @@ public class UserInfoServiceImpl implements UserInfoService {
     }
 
     @Override
-    public BigDecimal getAvailableMarginBalance(String usdt) {
-        AccountInfo accountInfo = getAccountInfo();
+    public BigDecimal getAvailableMarginBalance(AccountType accountType,String usdt) {
+        AccountInfo accountInfo = getAccountInfo(accountType);
         if (accountInfo == null) {
             return BigDecimal.ZERO;
         }

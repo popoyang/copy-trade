@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "lead.positions.task.enabled", havingValue = "true", matchIfMissing = true)
-public class ScanLeadPositionsTask {
+public class ScanLeadPositionsPublicTask {
 
     @Autowired
     private CopyTradeService copyTradeService;
@@ -23,7 +23,7 @@ public class ScanLeadPositionsTask {
     @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:150}")
     public void scanAndReplicatePositions() {
         try {
-            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.MAIN);
+            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.SECOND);
         } catch (Exception e) {
             log.error("ScanLeadPositionsTask 执行异常", e);
         }
