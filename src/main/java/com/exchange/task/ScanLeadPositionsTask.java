@@ -1,6 +1,5 @@
 package com.exchange.task;
 
-import com.exchange.enums.AccountType;
 import com.exchange.sevice.CopyTradeService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +22,7 @@ public class ScanLeadPositionsTask {
     @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:150}")
     public void scanAndReplicatePositions() {
         try {
-            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.MAIN);
+            copyTradeService.syncAndReplicatePositions(portfolioId);
         } catch (Exception e) {
             log.error("ScanLeadPositionsTask 执行异常", e);
         }
