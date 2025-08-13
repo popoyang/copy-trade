@@ -62,8 +62,8 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
                 LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
                 BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
-                BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()).abs() : BigDecimal.ZERO;
-                BigDecimal diff = currentQty.abs().subtract(lastQty);
+                BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
+                BigDecimal diff = calculateDiffBasedOnPositionType(pos,currentQty,lastQty);
 
                 if (diff.compareTo(BigDecimal.ZERO) != 0) {
                     if (myAvailableMargin == null || leadAvailableMargin == null) {
@@ -151,6 +151,16 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
 
         }
+    }
+
+    // 新增：计算差异时考虑仓位方向
+    private BigDecimal calculateDiffBasedOnPositionType(LeadPosition pos, BigDecimal currentQty, BigDecimal lastQty) {
+        if ("SHORT".equalsIgnoreCase(pos.getPositionSide()) || "SELL".equalsIgnoreCase(pos.getPositionSide())) {
+            // 对于 SHORT 或 SELL 仓位，确保差异计算时考虑仓位的符号
+            currentQty = currentQty.abs();
+            lastQty = lastQty.abs();
+        }
+        return currentQty.subtract(lastQty);
     }
 
 
