@@ -61,9 +61,9 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 currentKeys.add(key);
 
                 LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
-                BigDecimal currentQty = new BigDecimal(pos.getPositionAmount()).abs();
+                BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
                 BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()).abs() : BigDecimal.ZERO;
-                BigDecimal diff = currentQty.subtract(lastQty);
+                BigDecimal diff = currentQty.abs().subtract(lastQty);
 
                 if (diff.compareTo(BigDecimal.ZERO) != 0) {
                     if (myAvailableMargin == null || leadAvailableMargin == null) {
