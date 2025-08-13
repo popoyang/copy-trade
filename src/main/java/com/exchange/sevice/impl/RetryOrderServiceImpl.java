@@ -1,8 +1,10 @@
 package com.exchange.sevice.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.exchange.enums.AccountType;
 import com.exchange.model.LeadPosition;
 import com.exchange.model.OrderResponse;
+import com.exchange.model.OrderSide;
 import com.exchange.sevice.ClosePositionCallback;
 import com.exchange.sevice.LeadService;
 import com.exchange.sevice.OrderService;
@@ -75,13 +77,13 @@ public class RetryOrderServiceImpl implements RetryOrderService {
 
                 // 若最新仓位仍为0或不存在，确认平仓数量执行下单
                 if (latestQty.compareTo(BigDecimal.ZERO) == 0) {
-                    log.info("[延迟平仓确认] symbol={} positionSide={} 下单数量={}", symbol, positionSide, quantity);
-
+                    OrderSide closeSide = getCloseSide(positionSide, quantity);
+                    log.info("[延迟平仓确认] symbol={} positionSide={} 下单数量={} closeSide={}", symbol, positionSide, quantity, JSON.toJSONString(closeSide));
                     // 下单，带重试
                     placeMarketOrderWithRetry(accountType,
                             symbol,
-                            getCloseSide(positionSide),
-                            positionSide,
+                            closeSide.getOrderSide(),
+                            closeSide.getPositionSide(),
                             quantity);
                     closed = true;
                 } else {
@@ -100,14 +102,23 @@ public class RetryOrderServiceImpl implements RetryOrderService {
         }).start();
     }
 
-    private String getCloseSide(String positionSide) {
-        // 多头持仓平仓卖出，空头持仓平仓买入
-        if ("LONG".equalsIgnoreCase(positionSide)) {
-            return "SELL";
-        } else if ("SHORT".equalsIgnoreCase(positionSide)) {
-            return "BUY";
+    private OrderSide getCloseSide(String positionSide,BigDecimal positionAmount) {
+        if ("BOTH".equalsIgnoreCase(positionSide)) {
+            // 当前是平仓
+            if (positionAmount.compareTo(BigDecimal.ZERO) > 0) {
+                return new OrderSide("SELL", "LONG");
+            } else if (positionAmount.compareTo(BigDecimal.ZERO) < 0) {
+                // 平空仓（BUY）
+                return new OrderSide("BUY", "SHORT");
+            }
+        } else {
+            // 如果是 LONG 或 SHORT，正常的开仓或平仓操作
+            if ("LONG".equalsIgnoreCase(positionSide)) {
+                return new OrderSide("SELL", "LONG");
+            } else if ("SHORT".equalsIgnoreCase(positionSide)) {
+                return new OrderSide("BUY", "SHORT");
+            }
         }
-        // 默认卖出平仓
-        return "SELL";
+        throw new IllegalArgumentException("Invalid position side: " + positionSide);
     }
 }

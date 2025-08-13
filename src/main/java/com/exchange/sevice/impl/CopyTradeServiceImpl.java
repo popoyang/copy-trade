@@ -1,9 +1,11 @@
 package com.exchange.sevice.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.exchange.common.Constants;
 import com.exchange.common.RedisKeyConstants;
 import com.exchange.enums.AccountType;
 import com.exchange.model.LeadPosition;
+import com.exchange.model.OrderSide;
 import com.exchange.sevice.*;
 import com.exchange.util.StepSizeUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -59,9 +61,9 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 currentKeys.add(key);
 
                 LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
-                BigDecimal currentQty = new BigDecimal(pos.getPositionAmount()).abs();
+                BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
                 BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()).abs() : BigDecimal.ZERO;
-                BigDecimal diff = currentQty.subtract(lastQty);
+                BigDecimal diff = currentQty.abs().subtract(lastQty);
 
                 if (diff.compareTo(BigDecimal.ZERO) != 0) {
                     if (myAvailableMargin == null || leadAvailableMargin == null) {
@@ -80,11 +82,11 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                     if (myOrderQty.compareTo(BigDecimal.ZERO) == 0) {
                         log.info("{} 跳过小于最小下单单位的数量，symbol={} diff={} myOrderQty={}", accountType.name(), pos.getSymbol(), diff, myOrderQty);
                     } else {
-                        String side = getOrderSide(pos.getPositionSide(), diff.compareTo(BigDecimal.ZERO) > 0);
-                        log.info("{} [复刻下单] symbol={} positionSide={} lastQty={} currentQty={} diff={} 下单数量={}",
-                                accountType.name(), pos.getSymbol(), pos.getPositionSide(), lastQty, currentQty, diff, myOrderQty);
+                        OrderSide orderSide = getOrderSide(pos.getPositionSide(), currentQty, diff.compareTo(BigDecimal.ZERO) > 0);
+                        log.info("{} [复刻下单] symbol={} positionSide={} lastQty={} currentQty={} diff={} 下单数量={} orderDetails={}",
+                                accountType.name(), pos.getSymbol(), pos.getPositionSide(), lastQty, currentQty, diff, myOrderQty, JSON.toJSONString(orderSide));
 
-                        retryOrderService.placeMarketOrderWithRetry(accountType, pos.getSymbol(), side, pos.getPositionSide(), myOrderQty);
+                        retryOrderService.placeMarketOrderWithRetry(accountType, pos.getSymbol(), orderSide.getOrderSide(), orderSide.getPositionSide(), myOrderQty);
                     }
                 }
 
@@ -152,14 +154,42 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     }
 
 
-    private String getOrderSide(String positionSide, boolean isOpen) {
-        if ("LONG".equalsIgnoreCase(positionSide)) {
-            return isOpen ? "BUY" : "SELL";
-        } else if ("SHORT".equalsIgnoreCase(positionSide)) {
-            return isOpen ? "SELL" : "BUY";
+    private OrderSide getOrderSide(String positionSide, BigDecimal positionAmount, boolean isOpen) {
+        if ("BOTH".equalsIgnoreCase(positionSide)) {
+            if (isOpen) {
+                // 当前是开仓
+                if (positionAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    // 如果已有多头仓位，应该开空仓（SELL）
+                    return new OrderSide("SELL", "SHORT");
+                } else if (positionAmount.compareTo(BigDecimal.ZERO) < 0) {
+                    // 如果已有空头仓位，应该开多仓（BUY）
+                    return new OrderSide("BUY", "LONG");
+                } else {
+                    // 如果当前没有仓位，可以选择开多仓或空仓（默认开多仓）
+                    return new OrderSide("BUY", "LONG");
+                }
+            } else {
+                // 当前是平仓
+                if (positionAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    return new OrderSide("SELL", "LONG");
+                } else if (positionAmount.compareTo(BigDecimal.ZERO) < 0) {
+                    // 平空仓（BUY）
+                    return new OrderSide("BUY", "SHORT");
+                }
+            }
+        } else {
+            // 如果是 LONG 或 SHORT，正常的开仓或平仓操作
+            if ("LONG".equalsIgnoreCase(positionSide)) {
+                return new OrderSide(isOpen ? "BUY" : "SELL", "LONG");
+            } else if ("SHORT".equalsIgnoreCase(positionSide)) {
+                return new OrderSide(isOpen ? "SELL" : "BUY", "SHORT");
+            }
         }
-        return isOpen ? "BUY" : "SELL";
+
+        // 默认情况（可以根据需求调整）
+        return new OrderSide(isOpen ? "BUY" : "SELL", "LONG");
     }
+
 
     private String getPositionKey(AccountType accountType, LeadPosition pos) {
         return RedisKeyConstants.LEAD_POSITION_SNAPSHOT_HASH
