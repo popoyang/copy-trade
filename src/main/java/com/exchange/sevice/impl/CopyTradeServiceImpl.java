@@ -170,10 +170,11 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 // 当前是开仓
                 if (positionAmount.compareTo(BigDecimal.ZERO) > 0) {
                     // 如果已有多头仓位，应该开空仓（SELL）
-                    return new OrderSide("SELL", "SHORT");
+                    return new OrderSide("BUY", "LONG");
                 } else if (positionAmount.compareTo(BigDecimal.ZERO) < 0) {
                     // 如果已有空头仓位，应该开多仓（BUY）
-                    return new OrderSide("BUY", "LONG");
+                    return new OrderSide("SELL", "SHORT");
+
                 } else {
                     // 如果当前没有仓位，可以选择开多仓或空仓（默认开多仓）
                     return new OrderSide("BUY", "LONG");

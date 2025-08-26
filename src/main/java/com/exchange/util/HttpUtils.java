@@ -51,7 +51,7 @@ public class HttpUtils {
         CloseableHttpClient client = HttpClients.createDefault();
         HttpGet request = new HttpGet(url);
         request.setHeader("Content-Type","application/json");
-        request.setHeader("clienttype","web");
+        request.setHeader("Clienttype","web");
         if (headers != null) {
             headers.forEach((key, value) -> {
                 if (StringUtils.isNotBlank(value)) {

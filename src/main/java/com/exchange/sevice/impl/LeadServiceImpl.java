@@ -40,7 +40,7 @@ public class LeadServiceImpl implements LeadService {
 
     @PostConstruct
     public void initHeaders() {
-        stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, "csrftoken", csrftoken);
+        stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, "Csrftoken", csrftoken);
         stringRedisTemplate.opsForHash().put(RedisKeyConstants.REDIS_HEADER_KEY, "Cookie", cookie);
         log.info("Headers initialized: {}", stringRedisTemplate.opsForHash().entries(RedisKeyConstants.REDIS_HEADER_KEY));
     }
