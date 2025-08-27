@@ -32,8 +32,8 @@ public class UserInfoServiceImpl implements UserInfoService {
 
     private BinanceAccount getAccount(AccountType accountType) {
         switch(accountType) {
-            case SECOND:
-                return accountsConfig.getSecond();
+//            case SECOND:
+//                return accountsConfig.getSecond();
             case MAIN:
             default:
                 return accountsConfig.getMain();

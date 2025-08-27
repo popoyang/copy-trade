@@ -1,8 +1,8 @@
 package com.exchange.enums;
 
 public enum AccountType {
-    MAIN("main"),
-    SECOND("second");
+    MAIN("main");
+//    SECOND("second");
 
     private final String code;
 
