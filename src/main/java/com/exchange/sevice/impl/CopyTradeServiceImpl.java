@@ -42,6 +42,8 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
     @Value("${account.ratioMultiplier:4}")
     private BigDecimal ratioMultiplier;
+    @Value("${account.main.ratioMultiplier:0.5}")
+    private BigDecimal ratioMultiplierMain;
 
 
     public void syncAndReplicatePositions(String portfolioId, AccountType accountType) {
@@ -223,7 +225,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     public BigDecimal calculateRatio(AccountType accountType, BigDecimal myAvailableMargin, BigDecimal leadAvailableMargin) {
         BigDecimal baseRatio = myAvailableMargin.divide(leadAvailableMargin, 8, RoundingMode.DOWN);
         if (accountType == AccountType.MAIN) {
-            return baseRatio;
+            return baseRatio.multiply(ratioMultiplierMain);
         } else {
             return baseRatio.multiply(ratioMultiplier);
         }
