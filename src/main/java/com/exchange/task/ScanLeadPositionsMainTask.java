@@ -12,18 +12,18 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "lead.positions.task.enabled", havingValue = "true", matchIfMissing = true)
-public class ScanLeadPositionsTask {
+public class ScanLeadPositionsMainTask {
 
     @Autowired
     private CopyTradeService copyTradeService;
 
-    @Value("${binance.portfolioId}")
+    @Value("${binance.main.portfolioId}")
     private String portfolioId;
 
-    @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:150}")
+    @Scheduled(fixedRateString = "${lead.positions.main.task.fixedRate:130}")
     public void scanAndReplicatePositions() {
         try {
-            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.SECOND);
+            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.MAIN);
         } catch (Exception e) {
             log.error("ScanLeadPositionsTask 执行异常", e);
         }

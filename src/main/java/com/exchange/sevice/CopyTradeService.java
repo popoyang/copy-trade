@@ -1,8 +1,10 @@
 package com.exchange.sevice;
 
 
+import com.exchange.enums.AccountType;
+
 public interface CopyTradeService {
 
-    void syncAndReplicatePositions(String portfolioId);
+    void syncAndReplicatePositions(String portfolioId, AccountType accountType);
 }
 
