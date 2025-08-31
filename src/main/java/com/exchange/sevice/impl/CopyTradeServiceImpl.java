@@ -127,7 +127,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 if (myOrderQty.compareTo(BigDecimal.ZERO) > 0) {
                     log.info("{}[归零平仓处理] symbol={} positionSide={} 我方当前持仓数量={}，将尝试市价平仓",
                             accountType.name(), lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty);
-
+/*
                     // === 新增：计算持仓回报率 ===
                     BigDecimal pnlRatio = orderService.getMyPositionPnlRatio(
                             accountType, lastPos.getSymbol(), lastPos.getPositionSide()
@@ -139,7 +139,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                         log.info("{}持仓回报率未超过20%，跳过平仓 symbol={} side={}",
                                 accountType.name(), lastPos.getSymbol(), lastPos.getPositionSide());
                         continue;
-                    }
+                    }*/
 
                     // 加入等待中
                     stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET + ":" + accountType.name(), simpleKey);
