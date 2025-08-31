@@ -214,7 +214,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     public BigDecimal calculateRatio(AccountType accountType, BigDecimal myAvailableMargin, BigDecimal leadAvailableMargin) {
         BigDecimal baseRatio = myAvailableMargin.divide(leadAvailableMargin, 8, RoundingMode.DOWN);
         if (accountType == AccountType.MAIN) {
-            return baseRatio;
+            return baseRatio.multiply(ratioMultiplier);
         } else {
             return baseRatio.multiply(ratioMultiplier);
         }
