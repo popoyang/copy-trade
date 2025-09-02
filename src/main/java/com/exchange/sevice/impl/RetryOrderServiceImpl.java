@@ -78,7 +78,7 @@ public class RetryOrderServiceImpl implements RetryOrderService {
                 // 若最新仓位仍为0或不存在，确认平仓数量执行下单
                 if (latestQty.compareTo(BigDecimal.ZERO) == 0) {
                     OrderSide closeSide = getCloseSide(positionSide, quantity);
-                    log.info("[延迟平仓确认] symbol={} positionSide={} 下单数量={} closeSide={}", symbol, positionSide, quantity, JSON.toJSONString(closeSide));
+                    log.info("[延迟平仓确认] symbol={} positionSide={} 下单数量={} myOrderQty={} closeSide={}", symbol, positionSide, quantity, myOrderQty, JSON.toJSONString(closeSide));
                     // 下单，带重试
                     placeMarketOrderWithRetry(accountType,
                             symbol,
