@@ -74,7 +74,7 @@ public class RetryOrderServiceImpl implements RetryOrderService {
                 // 重新查询最新持仓，判断是否仍需平仓
                 LeadPosition latestPos = leadService.getPositionBySymbolAndSide(portfolioId,symbol, positionSide);
                 BigDecimal latestQty = latestPos != null ? new BigDecimal(latestPos.getPositionAmount()) : BigDecimal.ZERO;
-
+                BigDecimal myOrderQty = orderService.getMyPositionQuantity(accountType,symbol, positionSide);
                 // 若最新仓位仍为0或不存在，确认平仓数量执行下单
                 if (latestQty.compareTo(BigDecimal.ZERO) == 0) {
                     OrderSide closeSide = getCloseSide(positionSide, quantity);
@@ -84,7 +84,7 @@ public class RetryOrderServiceImpl implements RetryOrderService {
                             symbol,
                             closeSide.getOrderSide(),
                             closeSide.getPositionSide(),
-                            quantity);
+                            myOrderQty);
                     closed = true;
                 } else {
                     log.info("[延迟平仓取消] symbol={} positionSide={} 最新持仓数量={}，无需平仓", symbol, positionSide, latestQty);
