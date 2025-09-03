@@ -64,6 +64,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
             BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
             BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
             BigDecimal diff = calculateDiffBasedOnPositionType(pos,currentQty,lastQty);
+            log.info("symbol={} positionSide={} lastQty={} currentQty={} diff={} ", pos.getPositionAmount(), pos.getPositionSide(), lastQty, currentQty, diff);
 
             if (diff.compareTo(BigDecimal.ZERO) != 0) {
                 if (myAvailableMargin == null || leadAvailableMargin == null) {
