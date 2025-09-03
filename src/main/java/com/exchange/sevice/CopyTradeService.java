@@ -5,6 +5,6 @@ import com.exchange.enums.AccountType;
 
 public interface CopyTradeService {
 
-    void syncAndReplicatePositions(String portfolioId, AccountType accountType);
+    void syncAndReplicatePositions(String portfolioId);
 }
 

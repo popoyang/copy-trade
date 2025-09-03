@@ -23,7 +23,7 @@ public class ScanLeadPositionsTask {
     @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:150}")
     public void scanAndReplicatePositions() {
         try {
-            copyTradeService.syncAndReplicatePositions(portfolioId, AccountType.SECOND);
+            copyTradeService.syncAndReplicatePositions(portfolioId);
         } catch (Exception e) {
             log.error("ScanLeadPositionsTask 执行异常", e);
         }

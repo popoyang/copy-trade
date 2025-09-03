@@ -46,56 +46,58 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     private BigDecimal ratioMultiplierMain;
 
 
-    public void syncAndReplicatePositions(String portfolioId, AccountType accountType) {
-        List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
-        List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
-        log.info("syncAndReplicatePositions active positions: {}", activePositions);
+    public void syncAndReplicatePositions(String portfolioId) {
+        Arrays.stream(AccountType.values()).parallel().forEach(accountType -> {
+            List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
+            List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
+            log.info("syncAndReplicatePositions active positions: {}", activePositions);
 
-        Set<String> currentKeys = new HashSet<>();
-        BigDecimal myAvailableMargin = null;
-        BigDecimal leadAvailableMargin = null;
-        BigDecimal ratio = null;
+            Set<String> currentKeys = new HashSet<>();
+            BigDecimal myAvailableMargin = null;
+            BigDecimal leadAvailableMargin = null;
+            BigDecimal ratio = null;
 
-        for (LeadPosition pos : activePositions) {
-            String key = getPositionKey(accountType, pos);
-            currentKeys.add(key);
+            for (LeadPosition pos : activePositions) {
+                String key = getPositionKey(accountType, pos);
+                currentKeys.add(key);
 
-            LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
-            BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
-            BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
-            BigDecimal diff = calculateDiffBasedOnPositionType(pos,currentQty,lastQty);
-            log.info("symbol={} positionSide={} lastQty={} currentQty={} diff={} ", pos.getPositionAmount(), pos.getPositionSide(), lastQty, currentQty, diff);
+                LeadPosition lastPos = leadPositionRedisTemplate.opsForValue().get(key);
+                BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
+                BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
+                BigDecimal diff = calculateDiffBasedOnPositionType(pos,currentQty,lastQty);
+                log.info("symbol={} positionSide={} lastQty={} currentQty={} diff={} ", pos.getPositionAmount(), pos.getPositionSide(), lastQty, currentQty, diff);
 
-            if (diff.compareTo(BigDecimal.ZERO) != 0) {
-                if (myAvailableMargin == null || leadAvailableMargin == null) {
-                    myAvailableMargin = userInfoService.getAvailableMarginBalance(accountType, Constants.USDT);
-                    leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
+                if (diff.compareTo(BigDecimal.ZERO) != 0) {
+                    if (myAvailableMargin == null || leadAvailableMargin == null) {
+                        myAvailableMargin = userInfoService.getAvailableMarginBalance(accountType, Constants.USDT);
+                        leadAvailableMargin = leadService.getLeadMarginBalance(portfolioId);
 
-                    if (leadAvailableMargin.compareTo(BigDecimal.ZERO) == 0) {
-                        log.warn("{} leadAvailableMargin为0，跳过后续下单处理", accountType.name());
-                        break;
+                        if (leadAvailableMargin.compareTo(BigDecimal.ZERO) == 0) {
+                            log.warn("{} leadAvailableMargin为0，跳过后续下单处理", accountType.name());
+                            break;
+                        }
+                        ratio = calculateRatio(accountType, myAvailableMargin, leadAvailableMargin);
                     }
-                    ratio = calculateRatio(accountType, myAvailableMargin, leadAvailableMargin);
+
+                    BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(pos.getSymbol(), diff.abs().multiply(ratio));
+
+                    if (myOrderQty.compareTo(BigDecimal.ZERO) == 0) {
+                        log.info("{} 跳过小于最小下单单位的数量，symbol={} diff={} myOrderQty={}", accountType.name(), pos.getSymbol(), diff, myOrderQty);
+                    } else {
+                        OrderSide orderSide = getOrderSide(pos.getPositionSide(), currentQty, diff.compareTo(BigDecimal.ZERO) > 0);
+                        log.info("{} [复刻下单] symbol={} positionSide={} lastQty={} currentQty={} diff={} 下单数量={} orderDetails={}",
+                                accountType.name(), pos.getSymbol(), pos.getPositionSide(), lastQty, currentQty, diff, myOrderQty, JSON.toJSONString(orderSide));
+
+                        retryOrderService.placeMarketOrderWithRetry(accountType, pos.getSymbol(), orderSide.getOrderSide(), orderSide.getPositionSide(), myOrderQty);
+                    }
                 }
 
-                BigDecimal myOrderQty = StepSizeUtil.trimToStepSize(pos.getSymbol(), diff.abs().multiply(ratio));
-
-                if (myOrderQty.compareTo(BigDecimal.ZERO) == 0) {
-                    log.info("{} 跳过小于最小下单单位的数量，symbol={} diff={} myOrderQty={}", accountType.name(), pos.getSymbol(), diff, myOrderQty);
-                } else {
-                    OrderSide orderSide = getOrderSide(pos.getPositionSide(), currentQty, diff.compareTo(BigDecimal.ZERO) > 0);
-                    log.info("{} [复刻下单] symbol={} positionSide={} lastQty={} currentQty={} diff={} 下单数量={} orderDetails={}",
-                            accountType.name(), pos.getSymbol(), pos.getPositionSide(), lastQty, currentQty, diff, myOrderQty, JSON.toJSONString(orderSide));
-
-                    retryOrderService.placeMarketOrderWithRetry(accountType, pos.getSymbol(), orderSide.getOrderSide(), orderSide.getPositionSide(), myOrderQty);
-                }
+                // 存入 Redis 作为快照
+                leadPositionRedisTemplate.opsForValue().set(key, pos);
             }
 
-            // 存入 Redis 作为快照
-            leadPositionRedisTemplate.opsForValue().set(key, pos);
-        }
-
-        handleZeroPositions(accountType, currentKeys, currentPositions);
+            handleZeroPositions(accountType, currentKeys, currentPositions);
+        });
     }
 
     private void handleZeroPositions(AccountType accountType,Set<String> currentKeys,List<LeadPosition> currentPositions) {
