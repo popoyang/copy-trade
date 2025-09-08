@@ -20,7 +20,7 @@ public class ScanLeadPositionsTask {
     @Value("${binance.portfolioId}")
     private String portfolioId;
 
-    @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:130}")
+    @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:140}")
     public void scanAndReplicatePositions() {
         try {
             copyTradeService.syncAndReplicatePositions(portfolioId);
