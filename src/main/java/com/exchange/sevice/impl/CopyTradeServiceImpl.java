@@ -42,15 +42,16 @@ public class CopyTradeServiceImpl implements CopyTradeService {
 
     @Value("${account.ratioMultiplier:3}")
     private BigDecimal ratioMultiplier;
+    @Value("${account.main.ratioMultiplier:0.5}")
+    private BigDecimal ratioMultiplierMain;
 
 
     public void syncAndReplicatePositions(String portfolioId) {
-        List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
-        List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
-        log.info("syncAndReplicatePositions active positions: {}", activePositions);
-
-        // 并行处理所有 AccountType
         Arrays.stream(AccountType.values()).parallel().forEach(accountType -> {
+            List<LeadPosition> currentPositions = leadService.getLeadPositions(portfolioId);
+            List<LeadPosition> activePositions = leadService.getActivePositions(currentPositions);
+            log.info("syncAndReplicatePositions active positions: {}", activePositions);
+
             Set<String> currentKeys = new HashSet<>();
             BigDecimal myAvailableMargin = null;
             BigDecimal leadAvailableMargin = null;
@@ -64,6 +65,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 BigDecimal currentQty = new BigDecimal(pos.getPositionAmount());
                 BigDecimal lastQty = lastPos != null ? new BigDecimal(lastPos.getPositionAmount()) : BigDecimal.ZERO;
                 BigDecimal diff = calculateDiffBasedOnPositionType(pos,currentQty,lastQty);
+                log.info("symbol={} positionSide={} lastQty={} currentQty={} diff={} ", pos.getPositionAmount(), pos.getPositionSide(), lastQty, currentQty, diff);
 
                 if (diff.compareTo(BigDecimal.ZERO) != 0) {
                     if (myAvailableMargin == null || leadAvailableMargin == null) {
@@ -128,6 +130,19 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 if (myOrderQty.compareTo(BigDecimal.ZERO) > 0) {
                     log.info("{}[归零平仓处理] symbol={} positionSide={} 我方当前持仓数量={}，将尝试市价平仓",
                             accountType.name(), lastPos.getSymbol(), lastPos.getPositionSide(), myOrderQty);
+/*
+                    // === 新增：计算持仓回报率 ===
+                    BigDecimal pnlRatio = orderService.getMyPositionPnlRatio(
+                            accountType, lastPos.getSymbol(), lastPos.getPositionSide()
+                    );
+                    log.info("{}检查持仓回报率 symbol={} side={} pnlRatio={}",
+                            accountType.name(), lastPos.getSymbol(), lastPos.getPositionSide(), pnlRatio);
+
+                    if (pnlRatio.compareTo(BigDecimal.valueOf(0.20)) <= 0) {
+                        log.info("{}持仓回报率未超过20%，跳过平仓 symbol={} side={}",
+                                accountType.name(), lastPos.getSymbol(), lastPos.getPositionSide());
+                        continue;
+                    }*/
 
                     // 加入等待中
                     stringRedisTemplate.opsForSet().add(RedisKeyConstants.PENDING_CLOSE_SET + ":" + accountType.name(), simpleKey);
@@ -174,7 +189,6 @@ public class CopyTradeServiceImpl implements CopyTradeService {
                 } else if (positionAmount.compareTo(BigDecimal.ZERO) < 0) {
                     // 如果已有空头仓位，应该开多仓（BUY）
                     return new OrderSide("SELL", "SHORT");
-
                 } else {
                     // 如果当前没有仓位，可以选择开多仓或空仓（默认开多仓）
                     return new OrderSide("BUY", "LONG");

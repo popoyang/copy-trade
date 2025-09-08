@@ -20,6 +20,7 @@ import retrofit2.Call;
 import retrofit2.Response;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Slf4j
@@ -145,6 +146,83 @@ public class OrderServiceImpl implements OrderService {
         }
 
         return BigDecimal.ZERO;
+    }
+
+    @Override
+    public PositionRisk getMyPositionRisk(AccountType accountType,String symbol, String positionSide) {
+        if (StringUtils.isBlank(symbol)) {
+            log.warn("getMyPositionRisk Invalid parameters: symbol or positionSide is blank.");
+            return null;
+        }
+
+        try {
+            long timestamp = System.currentTimeMillis();
+            String queryString = "timestamp=" + timestamp + "&recvWindow=" + recvWindow;
+            String signature = HmacSHA256Utils.sign(queryString, getAccount(accountType).getSecretKey());
+
+            log.info("getMyPositionRisk Fetching position risk for symbol: {}, positionSide: {}", symbol, positionSide);
+
+            Call<List<PositionRisk>> call = binanceApiService.getPositionRisk(timestamp, recvWindow, signature, getAccount(accountType).getApiKey());
+            Response<List<PositionRisk>> response = call.execute();
+
+            if (!response.isSuccessful()) {
+                String errorBody = response.errorBody() != null ? response.errorBody().string() : "null";
+                log.error("getMyPositionRisk Failed to fetch position risk. Code: {}, Body: {}", response.code(), errorBody);
+                return null;
+            }
+
+            List<PositionRisk> positionRisks = response.body();
+            if (positionRisks == null || positionRisks.isEmpty()) {
+                return null;
+            }
+
+            for (PositionRisk positionRisk : positionRisks) {
+                if (symbol.equals(positionRisk.getSymbol())) {
+                    return positionRisk;
+                }
+            }
+
+
+        } catch (Exception e) {
+            log.error("Exception while fetching Binance position risk", e);
+        }
+
+        return null;
+    }
+
+
+    /**
+     * 计算我的持仓盈亏率（PNL Ratio）
+     * @param accountType
+     * @param symbol
+     * @param positionSide
+     * @return
+     */
+    public BigDecimal getMyPositionPnlRatio(AccountType accountType,String symbol, String positionSide) {
+        PositionRisk position = getMyPositionRisk(accountType, symbol, positionSide);
+        if (position == null
+                || position.getEntryPrice() == null
+                || position.getMarkPrice() == null
+                || position.getPositionAmt() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal entryPrice = new BigDecimal(position.getEntryPrice());
+        BigDecimal markPrice = new BigDecimal(position.getMarkPrice());
+        BigDecimal posAmt = new BigDecimal(position.getPositionAmt());
+
+        if (entryPrice.compareTo(BigDecimal.ZERO) == 0
+                || posAmt.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+
+        // 盈亏 = (标记价格 - 开仓均价) * 持仓数量
+        // 仓位价值 = 开仓均价 * |持仓数量|
+        BigDecimal pnl = markPrice.subtract(entryPrice).multiply(posAmt);
+        BigDecimal positionValue = entryPrice.multiply(posAmt.abs());
+
+        // 盈亏率 = 盈亏 / 仓位价值
+        return pnl.divide(positionValue, 8, RoundingMode.HALF_UP);
     }
 
 }

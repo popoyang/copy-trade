@@ -1,5 +1,6 @@
 package com.exchange.task;
 
+import com.exchange.enums.AccountType;
 import com.exchange.sevice.CopyTradeService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +20,7 @@ public class ScanLeadPositionsTask {
     @Value("${binance.portfolioId}")
     private String portfolioId;
 
-    @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:140}")
+    @Scheduled(fixedRateString = "${lead.positions.task.fixedRate:130}")
     public void scanAndReplicatePositions() {
         try {
             copyTradeService.syncAndReplicatePositions(portfolioId);
