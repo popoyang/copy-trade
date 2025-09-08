@@ -40,7 +40,7 @@ public class CopyTradeServiceImpl implements CopyTradeService {
     @Autowired
     private RedisTemplate<String, String> stringRedisTemplate;
 
-    @Value("${account.ratioMultiplier:2}")
+    @Value("${account.ratioMultiplier:3}")
     private BigDecimal ratioMultiplier;
 
 
